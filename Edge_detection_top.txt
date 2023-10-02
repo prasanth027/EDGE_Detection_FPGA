@@ -1,0 +1,184 @@
+----------------------------------------------------------------------------------
+-- Company: 
+-- Engineer: 
+-- 
+-- Create Date: 14.05.2020 05:00:19
+-- Design Name: 
+-- Module Name: EDGE_DETECTION_top - Behavioral
+-- Project Name: 
+-- Target Devices: 
+-- Tool Versions: 
+-- Description: 
+-- 
+-- Dependencies: 
+-- 
+-- Revision:
+-- Revision 0.01 - File Created
+-- Additional Comments:
+-- 
+----------------------------------------------------------------------------------
+
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use ieee.numeric_std.all;
+
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+--use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx leaf cells in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity EDGE_DETECTION_top is
+ port (
+	     clk     : in  std_logic;
+       reset   : in  std_logic;
+       start_top : out  std_logic;   --- Start button
+       data_pixel      : in  unsigned (7 downto 0);
+       pixel_out   : out unsigned (7 downto 0);
+       read_start  : out std_logic;
+       convol_out: out  std_logic
+       );
+end EDGE_DETECTION_top;
+
+architecture Behavioral of EDGE_DETECTION_top is
+component memory_input is
+Port (   clk   : in  std_logic;
+       reset   : in  std_logic;
+       start_top : out  std_logic;   --- Start button to fetch dataa from memory
+       address_memory :out STD_LOGIC_VECTOR(10 DOWNTO 0);
+       read_start : out  std_logic;
+       convol_out: in  std_logic
+       );
+end component;
+component controller is
+Port (clk     : in  std_logic;
+       reset   : in  std_logic;
+       start_fetching : in  std_logic;   --- Start button 
+       Pixel_datacomp : in  std_logic;   --- Completed Extracting D plication completed ack
+       start_operation : out  std_logic;
+        start_operation_conv : out  std_logic; --- starts convolution process
+       conv_mul : in  std_logic;
+       conv_mul1 : in  std_logic;
+       convol_out1: out  std_logic;
+        convol_out: out  std_logic;
+        Pixel_fetch : out  std_logic      --- Starts fetching data 
+         );
+    end component;
+  component Image_Data is      
+         port (clk             : in  std_logic;
+        reset           : in  std_logic;
+        Pixel_fetch      : in  std_logic;  --- Starts fetching data ack
+        Pixel_datacomp  : out std_logic;  --- Completed Extracting Data ACK to main controller
+        data_pixel      : STD_LOGIC_VECTOR ( 7 downto 0 );  ---- input data from the text file
+        start_operation : in  std_logic;  ----- input ack to send the data from registers to
+        pixel_out1       : out unsigned (23 downto 0);  ----- sends first 9 pixels for 3x3 convoluttion
+        pixel_out2       : out unsigned (23 downto 0);
+        pixel_out3       : out unsigned (23 downto 0)
+        );
+ end component;
+     
+  component xy_gradients is
+port (
+    clk         : in  std_logic;
+    reset       : in  std_logic;
+    start       : in  std_logic;
+    pixel_data1 :  in unsigned (23 downto 0);
+    pixel_data2 :  in unsigned (23 downto 0);
+    pixel_data3 :  in unsigned (23 downto 0);
+    pixel_ack   : out std_logic; 
+    data_ack   : out std_logic;
+    edge_pixel  : out unsigned (7 downto 0)
+    );
+ end component;
+ component blk_mem_gen_0 is
+  port (
+    clka : in STD_LOGIC;
+    ena : IN STD_LOGIC;
+    wea : in STD_LOGIC_VECTOR ( 0 to 0 );
+    addra : in STD_LOGIC_VECTOR ( 10 downto 0 );
+    dina : in STD_LOGIC_VECTOR ( 7 downto 0 );
+    douta : out STD_LOGIC_VECTOR ( 7 downto 0 )
+  );
+  end component blk_mem_gen_0;
+  component blk_mem_gen_1 is
+  port (
+    clka : in STD_LOGIC;
+    ena : IN STD_LOGIC;
+    wea : in STD_LOGIC_VECTOR ( 0 to 0 );
+    addra : in STD_LOGIC_VECTOR ( 10 downto 0 );
+    dina : in STD_LOGIC_VECTOR ( 7 downto 0 );
+    douta : out STD_LOGIC_VECTOR ( 7 downto 0 )
+  );
+  end component blk_mem_gen_1;
+     
+ signal start_top_sig,Pixel_fetch_sig,Pixel_datacomp_sig,start_operation_sig,conv_mul_sig,start_operation_conv_sig,CS,WE,RYxSO,pixel_ack_sig,data_ack_sig,pixel_ack_sig1,conv_mul_sig1:std_logic; 
+   signal pixel_out_sig1,pixel_out_sig2,pixel_out_sig3 : unsigned (23 downto 0);
+   signal edge_pixelin_sig :unsigned (7 downto 0);
+   signal pixel_Ram1_sig,pixel_Ram2_sig,ram1_sig,ram2_sig :std_logic_vector (63 downto 0);
+   signal addr1:std_logic_vector (13 downto 0);
+   signal addr2:std_logic_vector (12 downto 0);
+   signal address_memory_sig:std_logic_vector (12 downto 0);
+   signal read_startmem,convol_out_sig:std_logic;
+   signal wea_sig:std_logic_vector (0 downto 0);
+   signal data_pixel_sig,ram_out_sig,douta_sig,dina:std_logic_vector (7 downto 0);
+begin
+memory_input_INST: memory_input
+port map ( clk => clk,  
+       reset=> reset,   
+       start_top => start_top_sig,   --- Start button to fetch dataa from memory
+       address_memory => address_memory_sig,
+       read_start => read_startmem,
+       convol_out => convol_out_sig
+       );
+controller_INST: controller
+port map ( clk => clk,
+           reset => reset,
+           start_fetching => start_top_sig,
+         Pixel_datacomp  => Pixel_datacomp_sig,
+          start_operation  => start_operation_sig,
+         start_operation_conv  => start_operation_conv_sig,
+         conv_mul  => conv_mul_sig,
+         conv_mul1  => conv_mul_sig1,
+        convol_out  => convol_out,
+        convol_out1 => pixel_ack_sig1,
+        Pixel_fetch   => Pixel_fetch_sig
+     );
+  Image_Data_INST: Image_Data     
+      port map (clk => clk,
+               reset => reset,
+              Pixel_fetch     => Pixel_fetch_sig,
+        Pixel_datacomp => Pixel_datacomp_sig,
+        data_pixel => douta_sig,
+        start_operation =>  data_ack_sig,
+        pixel_out1 =>  pixel_out_sig1,
+        pixel_out2 =>  pixel_out_sig2,
+        pixel_out3 =>  pixel_out_sig3     
+        );
+    xy_gradients_INST: xy_gradients
+port map (
+    clk     => clk,
+    reset   => reset,
+    start => start_operation_sig,      
+    pixel_data1 => pixel_out_sig1,
+    pixel_data2 => pixel_out_sig2,
+    pixel_data3 => pixel_out_sig3,
+    data_ack  => data_ack_sig,
+    pixel_ack => pixel_ack_sig, 
+    edge_pixel => edge_pixelin_sig 
+    );
+
+
+blk_mem_gen_0_Inst:blk_mem_gen_0
+port map (
+    clka  => clk,
+    ena   => read_startmem,
+    wea   => wea_sig,
+    addra => address_memory_sig,
+    dina  => dina,
+    douta => douta_sig
+  );
+ end Behavioral;

@@ -1,0 +1,125 @@
+----------------------------------------------------------------------------------
+-- Company: 
+-- Engineer: 
+-- 
+-- Create Date: 07.05.2020 21:14:25
+-- Design Name: 
+-- Module Name: xy_gradients - Behavioral
+-- Project Name: 
+-- Target Devices: 
+-- Tool Versions: 
+-- Description: 
+-- 
+-- Dependencies: 
+-- 
+-- Revision:
+-- Revision 0.01 - File Created
+-- Additional Comments:
+-- 
+----------------------------------------------------------------------------------
+
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use ieee.numeric_std.all;
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+--use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx leaf cells in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity xy_gradients is
+port (
+    clk         : in  std_logic;
+    reset       : in  std_logic;
+    start       : in  std_logic;
+    pixel_data1 :  in unsigned (23 downto 0);
+    pixel_data2 :  in unsigned (23 downto 0);
+    pixel_data3 :  in unsigned (23 downto 0);
+    pixel_ack   : out std_logic;
+    data_ack   : out std_logic; 
+    edge_pixel  : out unsigned (7 downto 0)
+    );
+end xy_gradients;
+
+architecture Behavioral of xy_gradients is
+ type  state_type is (idle, convolution, absolutex,absolutey,threshold);
+ signal current_state, next_state    : state_type;
+ signal gradx,gradx_n,grady,grady_n   : signed(10 downto 0);
+ signal absx,absy,absx_n,absy_n     : signed(10 downto 0);
+ signal sumxy,sumxy_n         : unsigned(10 downto 0);
+begin
+ process(clk, reset)
+  begin
+    if reset = '1' then
+      current_state      <= idle;
+       gradx  <= (others => '0');
+       grady  <= (others => '0');
+       absx   <= (others => '0');
+       absy   <= (others => '0');
+       sumxy  <= (others => '0');
+    elsif clk'event and clk = '1' then
+      current_state      <= next_state;
+      gradx  <= gradx_n;
+       grady  <= grady_n;
+       absx   <= absx_n;
+       absy   <= absy_n;
+       sumxy  <= sumxy_n;
+  end if;
+  end process;
+process(current_state,start,pixel_data1,pixel_data2,pixel_data3,gradx,grady,absx,absy,sumxy,sumxy_n)
+begin
+next_state  <= current_state;
+gradx_n  <= gradx;
+grady_n  <= grady;
+absx_n   <= absx;
+absy_n   <= absy;
+sumxy_n  <= sumxy;
+data_ack   <= '0';
+pixel_ack  <=  '0';
+edge_pixel  <= (others => '0');
+   case current_state is
+      when idle =>
+         if start = '1' then
+          next_state <= convolution;
+        else
+          next_state <= idle;
+          end if;
+        when convolution =>
+          data_ack   <= '1';
+         gradx_n <= signed(("000"&(pixel_data1(7 downto 0)))+("000"&(pixel_data1(15 downto 8)))+("000"&(pixel_data1(15 downto 8)))+("000"&(pixel_data1(23 downto 16)))-("000"&(pixel_data3(7 downto 0)))-("000"&(pixel_data3(15 downto 8)))-("000"&(pixel_data3(15 downto 8)))-("000"&(pixel_data3(23 downto 16))));
+         grady_n <= signed(( ("000"&(pixel_data1(7 downto 0)))+("000"&(pixel_data2(7 downto 0)))+("000"&(pixel_data2(7 downto 0)))+("000"&(pixel_data3(7 downto 0))))-(("000"&(pixel_data1(23 downto 16)))+("000"&(pixel_data2(23 downto 16)))+("000"&(pixel_data2(23 downto 16)))+("000"&(pixel_data3(23 downto 16)))));
+       next_state <= absolutex;
+        when absolutex =>
+          if gradx(10)='1' then
+            absx_n <= not(gradx)+ 1;
+            next_state <= absolutey;
+            else
+             absx_n <= gradx;
+             next_state <= absolutey;
+            end if;
+         when absolutey =>
+          if grady(10)='1' then
+            absy_n <= not(grady)+ 1;
+            next_state <= threshold;
+            else
+             absy_n <= grady;
+             next_state <= threshold;
+            end if;  
+          when threshold =>
+             sumxy_n <= unsigned(absx)+ unsigned(absy);
+              if (sumxy_n(10 downto 8) > "000")then
+                edge_pixel <= "11111111";
+                pixel_ack <= '1';
+                next_state <= idle;
+               else 
+                edge_pixel <= sumxy_n(7 downto 0);
+                pixel_ack <= '1';
+                next_state <= idle;
+                end if;
+                end case;
+              end process;   
+end Behavioral;

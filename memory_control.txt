@@ -1,0 +1,187 @@
+----------------------------------------------------------------------------------
+-- Company: 
+-- Engineer: 
+-- 
+-- Create Date: 24.02.2021 15:17:30
+-- Design Name: 
+-- Module Name: memory_input - Behavioral
+-- Project Name: 
+-- Target Devices: 
+-- Tool Versions: 
+-- Description: 
+-- 
+-- Dependencies: 
+-- 
+-- Revision:
+-- Revision 0.01 - File Created
+-- Additional Comments:
+-- 
+----------------------------------------------------------------------------------
+
+
+library ieee;
+library work;
+use ieee.std_logic_1164.all;
+use ieee.std_logic_unsigned.all;
+use ieee.numeric_std.all;
+
+
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+--use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx leaf cells in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity memory_input is
+   Port (   clk   : in  std_logic;
+       reset   : in  std_logic;
+       start_top : out  std_logic;   --- Start button to fetch dataa from memory
+       address_memory :out STD_LOGIC_VECTOR(10 DOWNTO 0);
+       read_start : out  std_logic;
+       convol_out: in  std_logic
+       );
+end memory_input;
+
+architecture Behavioral of memory_input is
+type state_type is (idle, inputfetch1,inputfetch2,inputfetch3,new_pixel,column_inc,delay);
+ signal current_state, next_state : state_type; 
+signal clk_top, rst_top, convol_out_tb,read_start_tb: std_logic := '0';
+signal input_pixel : unsigned(7 downto 0) := (others => '0');
+signal x_n,x, y_n,y, x1_n,x1,y1_n,y1,x2_n,x2,y2_n,y2,n_next,n,i,i_next,counter_current_read, counter_nxt_read,count1,countnext1,count11,countnext11,count,countnext : unsigned(12 downto 0) := (others => '0');
+       
+ begin
+  process(clk,reset)            -- The register process
+  begin   if reset = '1' then
+	  current_state <= idle;
+	       x <= (others => '0');
+          y <= (others => '0');
+         x1 <= (others => '0');
+          y1 <= (others => '0');
+         x2 <= (others => '0');
+          y2 <= (others => '0');
+        --  n <= (others => '0');
+          i <= (others => '0');
+          counter_current_read <= (others => '0');
+          count1<= (others => '0');
+          count11<= (others => '0');
+          count <= (others => '0');
+     elsif clk'event and clk = '1' then
+        current_state <= next_state;
+        x <= x_n;
+          y <= y_n;
+         x1 <= x1_n;
+          y1 <= y1_n;
+         x2 <= x2_n;
+          y2 <= y2_n;
+          --n <= n_next;
+          i <= i_next;
+          counter_current_read <= counter_nxt_read;
+          count1 <= countnext1;
+          count11 <= countnext11;
+          count <= countnext;
+     end if;	
+end process;
+
+memory_comb: process(current_state,x,y,x1,y1,x2,y2,n,i,convol_out_tb,counter_current_read,read_start_tb,count1,count11,count) 
+begin
+
+next_state <= current_state;
+ input_pixel <= (others => '0');
+        x_n<= x;
+          y_n <= y;
+         x1_n <= x1;
+          y1_n <= y1;
+         x2_n <= x2;
+          y2_n <= y2;
+          n_next <= n;
+          i_next <= i;
+          countnext1 <= count1;
+          countnext11 <= count11;
+          countnext <= count;
+case current_state is    
+				 
+when idle =>
+      if (i < 1) then
+        start_top <= '1';
+       next_state <= delay;
+      else
+	     start_top <= '0';
+	       next_state <= idle;
+        end if;
+when delay =>
+      next_state <= inputfetch1;
+when inputfetch1 =>
+    if (x < 288 and y < 3 ) then
+     address_memory <= STD_LOGIC_VECTOR((n*288)+x);
+      address_memory <= "11";
+     read_start <= '1';
+     x_n <= x + 1;   
+     y_n <= y + 1;    ---- counter for 3 elements in a row
+    next_state <= inputfetch1;
+    elsif(x < 288 and y = 3) then
+    x_n <= x - 2;
+    y_n <= (others => '0');
+    next_state <= inputfetch2;
+    else
+    x_n <= (others => '0');
+     y_n <= (others => '0');
+    next_state <= inputfetch2;
+  end if;
+when inputfetch2 =>
+  if (x1 < 288 and y1 < 3 ) then
+    address_memory <= STD_LOGIC_VECTOR(((n+1)*288)+x1);
+    read_start <= '1';
+    x1_n <= x1 + 1;
+    y1_n <= y1 + 1;
+    next_state <= inputfetch2;
+  elsif(x1 < 288 and y1 = 3) then
+     x1_n <= x1 - 2;
+     y1_n <= (others => '0');
+     next_state <= inputfetch3;
+  else
+    x1_n <= (others => '0');
+    y1_n <= (others => '0');
+    next_state <= inputfetch3;
+   end if;
+when inputfetch3 =>
+   if (x2 < 288 and y2 < 3 ) then
+    address_memory <= STD_LOGIC_VECTOR(((n+2)*288)+x2);
+    read_start <= '1';
+    x2_n <= x2 + 1;
+    y2_n <= y2 + 1;
+     next_state <= inputfetch3;
+    elsif(x2 < 288 and y2 = 3) then
+     x2_n <= x2 - 2;
+    y2_n <= (others => '0');
+    next_state <= new_pixel;
+    else
+    x2_n <= (others => '0');
+     y2_n <= (others => '0');
+    next_state <= new_pixel;
+  end if;
+when new_pixel =>
+     if (convol_out = '1' and count11 < 285 ) then
+       countnext11 <= count11 +1;
+      next_state <= delay;
+    elsif (convol_out = '1' and count11 = 285 ) then
+      countnext11 <= (others => '0');
+      next_state <= delay;
+     else
+       next_state <= new_pixel;
+      end if;
+--    when column_inc  =>
+--         if (n < 349) then
+--           n_next <= n + 1;
+--           next_state <= inputfetch1;
+--           elsif (n = 349) then
+--           n_next <= (others => '0');
+--           i_next <= i + 1;
+--          next_state <= idle;
+--         end if;
+    
+end case;
+end process memory_comb;
+end Behavioral;
